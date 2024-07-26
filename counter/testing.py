@@ -4,13 +4,16 @@ import imutils
 import numpy as np
 from centroidtracker import CentroidTracker
 
-protopath = "MobileNetSSD_deploy.prototxt"
-modelpath = "MobileNetSSD_deploy.caffemodel"
-detector = cv2.dnn.readNetFromCaffe(prototxt=protopath, caffeModel=modelpath)
-# # Only enable it if you are using OpenVino environment
-# detector.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE)
-# detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+# Paths to the model files
+protopath = "C:/Users/sudha/Desktop/hackathon/Hack4Change/Crowd-Distrubtion-System/counter/MobileNetSSD_deploy.prototxt"
+modelpath = "C:/Users/sudha/Desktop/hackathon/Hack4Change/Crowd-Distrubtion-System/counter/MobileNetSSD_deploy.caffemodel"
 
+# Load the model
+detector = cv2.dnn.readNetFromCaffe(protopath, modelpath)
+
+# If you have a compatible GPU, you can enable it for faster processing
+detector.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
 CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
@@ -18,7 +21,6 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "sofa", "train", "tvmonitor"]
 
 tracker = CentroidTracker(maxDisappeared=80, maxDistance=90)
-
 
 def non_max_suppression_fast(boxes, overlapThresh):
     try:
@@ -60,6 +62,8 @@ def non_max_suppression_fast(boxes, overlapThresh):
     except Exception as e:
         print("Exception occurred in non_max_suppression : {}".format(e))
 
+def count_persons(objects):
+    return len(objects)
 
 def main():
     cap = cv2.VideoCapture(0)  # Use the system camera
@@ -79,12 +83,12 @@ def main():
             print("Error: Could not read frame.")
             break
 
-        frame = imutils.resize(frame, width=600)
+        frame = imutils.resize(frame, width=400)  # Reduce frame size for faster processing
         total_frames += 1
 
         (H, W) = frame.shape[:2]
 
-        blob = cv2.dnn.blobFromImage(frame, 0.007843, (W, H), 127.5)
+        blob = cv2.dnn.blobFromImage(frame, 0.007843, (300, 300), 127.5)  # Resize blob to 300x300
 
         detector.setInput(blob)
         person_detections = detector.forward()
@@ -106,6 +110,8 @@ def main():
         rects = non_max_suppression_fast(boundingboxes, 0.3)
 
         objects = tracker.update(rects)
+        num_persons = count_persons(objects)
+
         for (objectId, bbox) in objects.items():
             x1, y1, x2, y2 = bbox
             x1 = int(x1)
@@ -115,7 +121,7 @@ def main():
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
             text = "ID: {}".format(objectId)
-            cv2.putText(frame, text, (x1, y1-5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+            cv2.putText(frame, text, (x1, y1 - 5), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
 
         fps_end_time = datetime.datetime.now()
         time_diff = fps_end_time - fps_start_time
@@ -125,8 +131,10 @@ def main():
             fps = (total_frames / time_diff.seconds)
 
         fps_text = "FPS: {:.2f}".format(fps)
+        persons_text = "Persons: {}".format(num_persons)
 
         cv2.putText(frame, fps_text, (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+        cv2.putText(frame, persons_text, (5, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
 
         cv2.imshow("Application", frame)
         key = cv2.waitKey(1)
@@ -135,6 +143,5 @@ def main():
 
     cap.release()
     cv2.destroyAllWindows()
-
 
 main()
